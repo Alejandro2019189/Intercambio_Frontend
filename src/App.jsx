@@ -7,6 +7,7 @@ const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || "1234";
 function App() {
   // Intercambio (todos lo ven)
   const [nombre, setNombre] = useState("");
+  const [pin, setPin] = useState(""); // PIN del participante
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(false);
@@ -14,9 +15,9 @@ function App() {
 
   // Admin / resumen (solo tú)
   const [isAdmin, setIsAdmin] = useState(false);
-  const [mostrarPin, setMostrarPin] = useState(false);
-  const [pin, setPin] = useState("");
-  const [errorPin, setErrorPin] = useState(null);
+  const [mostrarPinAdmin, setMostrarPinAdmin] = useState(false);
+  const [pinAdmin, setPinAdmin] = useState("");
+  const [errorPinAdmin, setErrorPinAdmin] = useState(null);
 
   const [resumen, setResumen] = useState([]);
   const [cargandoResumen, setCargandoResumen] = useState(false);
@@ -41,8 +42,10 @@ function App() {
     e.preventDefault();
 
     const nombreLimpio = nombre.trim();
-    if (!nombreLimpio) {
-      setError("Escribe tu nombre.");
+    const pinLimpio = pin.trim();
+
+    if (!nombreLimpio || !pinLimpio) {
+      setError("Escribe tu nombre y tu PIN.");
       setResultado(null);
       return;
     }
@@ -55,7 +58,7 @@ function App() {
       const res = await fetch(`${API_URL}/asignar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: nombreLimpio }),
+        body: JSON.stringify({ nombre: nombreLimpio, pin: pinLimpio }),
       });
 
       const data = await res.json();
@@ -80,7 +83,7 @@ function App() {
     }
   };
 
-  // Función para cargar el resumen SOLO cuando seas admin
+  // Cargar resumen (solo cuando eres admin)
   const cargarResumen = async () => {
     setCargandoResumen(true);
     setErrorResumen(null);
@@ -95,30 +98,29 @@ function App() {
         setResumen(data);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error al llamar /resumen:", err);
       setErrorResumen("Error de conexión al cargar el resumen.");
     } finally {
       setCargandoResumen(false);
     }
   };
 
-  // Cuando se cambia a admin por primera vez, cargar resumen
   useEffect(() => {
     if (isAdmin) {
       cargarResumen();
     }
   }, [isAdmin]);
 
-  const manejarConfirmarPin = (e) => {
+  const manejarConfirmarPinAdmin = (e) => {
     e.preventDefault();
-    setErrorPin(null);
+    setErrorPinAdmin(null);
 
-    if (pin === ADMIN_PIN) {
+    if (pinAdmin === ADMIN_PIN) {
       setIsAdmin(true);
-      setMostrarPin(false);
-      setPin("");
+      setMostrarPinAdmin(false);
+      setPinAdmin("");
     } else {
-      setErrorPin("PIN incorrecto.");
+      setErrorPinAdmin("PIN de organizador incorrecto.");
     }
   };
 
@@ -127,10 +129,10 @@ function App() {
       <div className="card card-wide">
         <h1>Intercambio 2025</h1>
         <p className="subtitle">
-          Escribe tu nombre exactamente como fue registrado.
+          Escribe tu nombre exactamente como fue registrado y tu PIN personal.
         </p>
 
-        {/* Formulario visible para todos */}
+        {/* Formulario del participante */}
         <form onSubmit={handleSubmit} className="form">
           <label htmlFor="nombre">Tu nombre:</label>
           <input
@@ -138,9 +140,20 @@ function App() {
             type="text"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Ej. Brandon Mendoza"
+            placeholder="Ej. Alejandro"
             autoComplete="off"
           />
+
+          <label htmlFor="pin">Tu PIN personal:</label>
+          <input
+            id="pin"
+            type="password"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="PIN que te dio el organizador"
+            autoComplete="off"
+          />
+
           <button type="submit" disabled={cargando}>
             {cargando ? "Buscando..." : "Ver quién te tocó"}
           </button>
@@ -174,29 +187,31 @@ function App() {
 
         {/* Sección solo organizador */}
         <div className="admin-section">
-          {!isAdmin && !mostrarPin && (
+          {!isAdmin && !mostrarPinAdmin && (
             <button
               type="button"
               className="admin-toggle"
-              onClick={() => setMostrarPin(true)}
+              onClick={() => setMostrarPinAdmin(true)}
             >
               Soy el organizador
             </button>
           )}
 
-          {mostrarPin && !isAdmin && (
-            <form className="pin-form" onSubmit={manejarConfirmarPin}>
-              <label htmlFor="pin">
+          {mostrarPinAdmin && !isAdmin && (
+            <form className="pin-form" onSubmit={manejarConfirmarPinAdmin}>
+              <label htmlFor="pinAdmin">
                 PIN de organizador (solo tú deberías tenerlo):
               </label>
               <input
-                id="pin"
+                id="pinAdmin"
                 type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
+                value={pinAdmin}
+                onChange={(e) => setPinAdmin(e.target.value)}
               />
               <button type="submit">Entrar</button>
-              {errorPin && <div className="alert error">{errorPin}</div>}
+              {errorPinAdmin && (
+                <div className="alert error">{errorPinAdmin}</div>
+              )}
             </form>
           )}
 
@@ -209,7 +224,8 @@ function App() {
                 </button>
               </div>
               <p className="subtitle">
-                Solo visible para el organizador: quién le da a quién.
+                Solo visible para el organizador: quién le da a quién y el PIN
+                de cada persona.
               </p>
 
               {cargandoResumen && <p>Cargando resumen...</p>}
@@ -229,6 +245,7 @@ function App() {
                         <th>#</th>
                         <th>Persona</th>
                         <th>Familia</th>
+                        <th>PIN</th>
                         <th>Le da a</th>
                         <th>Familia destino</th>
                       </tr>
@@ -239,6 +256,7 @@ function App() {
                           <td>{idx + 1}</td>
                           <td>{item.nombre}</td>
                           <td>{item.familia}</td>
+                          <td>{item.pin}</td>
                           <td>{item.asignadoA?.nombre || "Sin asignar"}</td>
                           <td>{item.asignadoA?.familia || "-"}</td>
                         </tr>
